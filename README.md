@@ -5,7 +5,10 @@ Relation extraction through distal supervision with CNNs.
 Download from: https://github.com/thunlp/NRE/blob/master/data.zip and extract to the top-most level of the repository. Structure should be:
 
 ```
-└── data
-      ├── RE
+└── data/
+      ├── entity2id.txt
+      ├── relation2id.txt
+      ├── test.txt
+      ├── train.txt
       └── vec.bin
 ```
