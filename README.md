@@ -2,7 +2,7 @@
 Relation extraction through distal supervision with CNNs. Reproducing Zeng et al's work here: http://www.emnlp2015.org/proceedings/EMNLP/pdf/EMNLP203.pdf
 
 ## Data
-Download from: https://github.com/thunlp/NRE/blob/master/data.zip and extract to the top-most level of the repository. Structure should be:
+Download the NYT10 relation extraction dataset from: https://github.com/thunlp/NRE/blob/master/data.zip and extract to the top-most level of the repository. Also download the Wikipedia 2014 + Gigaword 5 distribution of the pretrained GloVe vectors from here: http://nlp.stanford.edu/data/glove.6B.zip. Structure should be:
 
 ```
 └── data/
@@ -10,7 +10,7 @@ Download from: https://github.com/thunlp/NRE/blob/master/data.zip and extract to
       ├── relation2id.txt
       ├── test.txt
       ├── train.txt
-      └── vec.bin
+      └── data/glove.6B.50d.txt
 ```
 
 The dataset is in the following format:
