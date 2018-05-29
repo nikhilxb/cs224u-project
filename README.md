@@ -18,4 +18,4 @@ The dataset is in the following format:
 + test.txt: test file, same format as train.txt.
 + entity2id.txt: all entities and corresponding ids, one per line.
 + relation2id.txt: all relations and corresponding ids, one per line.
-+ vec.bin: the pre-train word embedding file
++ glove.6B.50d.txt: the pre-trained GloVe word embedding file hosted by Stanford NLP
