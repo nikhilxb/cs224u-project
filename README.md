@@ -10,7 +10,7 @@ Download the NYT10 relation extraction dataset from: https://github.com/thunlp/N
       ├── relation2id.txt
       ├── test.txt
       ├── train.txt
-      └── data/glove.6B.50d.txt
+      └── glove.6B.50d.txt
 ```
 
 The dataset is in the following format:
