@@ -1,4 +1,6 @@
 jupyter
 numpy
 pandas
+scikit-learn
+scipy
 torch

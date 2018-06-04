@@ -54,6 +54,9 @@ class NYT10Dataset(Dataset):
     def __len__(self):
         return len(self.sentences_frame)
 
+    def num_relations(self):
+        return len(self.relation2id)
+
     def __getitem__(self, idx):
         _, _, e1_name, e2_name, relation, text = self.sentences_frame.iloc[idx]
         text = text.split(' ')
@@ -66,7 +69,15 @@ class NYT10Dataset(Dataset):
         c3 = text[upper+1:]
         return c1, c2, c3, self.relation2id[relation]
 
-if __name__ == 'main':
+if __name__ == '__main__':
     sentences_dataset = NYT10Dataset('data/test.txt', 'data/relation2id.txt')
     print(sentences_dataset.sentences_frame.head())
-    print(sentences_dataset.relation2id)
+    print(sentences_dataset.num_relations())
+
+    # lengths = [0]*3
+    # for c1, c2, c3, _ in sentences_dataset:
+    #     lengths[0] = max(lengths[0], len(c1))
+    #     lengths[1] = max(lengths[1], len(c2))
+    #     lengths[2] = max(lengths[2], len(c3))
+
+    # print(lengths)  # [217, 189, 144]

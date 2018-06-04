@@ -49,9 +49,9 @@ class PiecewiseCNN(nn.Module):
     """Applies convolution over a variable number of pieces and concatenates all the output pieces."""
     def __init__(self,
                  input_dim,
-                 output_dim=50,
+                 output_dim=230,
                  kernel_size=3,
-                 padding=1):
+                 padding=2):
         super(PiecewiseCNN, self).__init__()
         self.conv1 = nn.Conv1d(input_dim, output_dim, kernel_size, padding=padding)
 
@@ -73,13 +73,13 @@ class PiecewiseCNN(nn.Module):
 
 if __name__ == "__main__":
     # Test PiecewiseCNN
-    x1 = autograd.Variable(torch.rand(3, 5, 7))  # (batch_size, input_dim, piece_len)
-    x2 = autograd.Variable(torch.rand(3, 5, 2))
-    pcnn = PiecewiseCNN(input_dim=5, output_dim=10)
+    x1 = torch.rand(3, 4, 7, requires_grad=True)  # (batch_size, embed_size, sequence_len)
+    x2 = torch.rand(3, 4, 2, requires_grad=True)
+    pcnn = PiecewiseCNN(4, output_dim=10)
     out = pcnn(x1, x2)  # (batch_size, output_dim, num_pieces)
     print("PiecewiseCNN test:", out.size() == (3, 10, 2))
 
     # Test RelationClassifier
-    rc = RelationClassifier()
-    print("RelationClassifier test:")
-    print("--- _assemble_vec_seq:", rc._assemble_vec_seq(['apple', 'banana', 'coconut', 'durian', 'apple']))
+    # rc = RelationClassifier()
+    # print("RelationClassifier test:")
+    # print("--- _assemble_vec_seq:", rc._assemble_vec_seq(['apple', 'banana', 'coconut', 'durian', 'apple']))
