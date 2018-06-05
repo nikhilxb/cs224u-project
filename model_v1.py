@@ -1,5 +1,4 @@
 import torch
-import torch.autograd as autograd
 import torch.nn as nn
 import torch.nn.functional as functional
 from torch.nn.utils.rnn import pad_sequence
@@ -39,7 +38,7 @@ class RelationClassifier(nn.Module):
         Return:
             FloatTensor(batch_size, num_labels)
         """
-        C1, C2, C3 = zip(*X)  # list[ tuple(c1a, c1b, ...), tuple(c2a, c2b, ...), tuple(c3a, c3b, ...)]
+        C1, C2, C3 = zip(*X)  # list[ tuple(1_c1, 1_c2, 1_c3), tuple(2_c1, 2_c2, 2_c3), ...]
 
         C1 = pad_sequence([self._assemble_vec_seq(c) for c in C1], batch_first=True).transpose(1, 2)
         C2 = pad_sequence([self._assemble_vec_seq(c) for c in C2], batch_first=True).transpose(1, 2)

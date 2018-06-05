@@ -67,7 +67,7 @@ class NYT10Dataset(Dataset):
         c1 = text[:lower]
         c2 = text[lower+1:upper]
         c3 = text[upper+1:]
-        return c1, c2, c3, self.relation2id[relation]
+        return (c1, c2, c3), self.relation2id[relation]
 
 if __name__ == '__main__':
     sentences_dataset = NYT10Dataset('data/test.txt', 'data/relation2id.txt')
