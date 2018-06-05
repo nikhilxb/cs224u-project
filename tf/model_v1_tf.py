@@ -1,7 +1,7 @@
 import tensorflow as tf 
 import numpy as np
-
-
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import utils
 
 
@@ -30,7 +30,7 @@ class RelationClassifier():
 		NOTE THAT WE ADD THE UNK_TOKEN HERE, AND VOCAB_SIZE INCREASES BY 1, BUT
 		WE WILL STILL CALL vocab_size AND NOT vocab_size + 1 FOR CONVENIENCE
 	"""
-	def __init__(self, embedding_matrix, word2Index, index2Word):
+	def __init__(self, embedding_matrix, word2Index, index2Word, sentenceLengths):
 		# add unk token to embedding matrix
 		np.random.seed(1)
 		# create a random vector
@@ -49,6 +49,19 @@ class RelationClassifier():
 		self.stride = 1
 		# probability of dropping out a neuron
 		self.dropout_rate = 0.2
+		# number of epochs
+		self.num_epochs = 3
+		# Will use later
+		self.sentenceLengths = sentenceLengths
+
+		# This is the actual operations
+		self.add_placeholders()
+		self.build_graph()
+		#self.add_loss()
+
+	def add_placeholders(self):
+		self.X = tf.placeholder(tf.float32, shape=[None, embed_dim, None])
+		self.y = tf.placeholder(tf.int32, shape=[None, 1])
 		
 	def convertInputToTensor(self, X):
 		"""
@@ -100,6 +113,40 @@ class RelationClassifier():
 			(2.0 * index2 + 1 - self.w)/(2*selfstride)]
 			cutPoints.append(point)
 		return cutPoints
+
+	def build_graph(self):
+		X = tf.expand_dims(self.X, axis=-1)
+		embed_dim = X.shape[1]
+		# out:(batch_size, 1, (convolution formula(maxSenLen+2w-2, self.w)), self.numFilters)
+		out = tf.layers.conv2d(X, self.num_filters, [embed_dim, self.w], 
+			strides = [1, self.stride])
+		# out:(batch_size, (convolution formula(maxSenLen+2w-2, self.w)), self.numFilters)
+		out = tf.squeeze(out)
+		batch_size = X.shape[0]
+		examples = tf.split(out, num_or_size_splits=batch_size, axis=0)
+		vectors = []
+		for i in xrange(batch_size):
+			# example:(1, (convolution formula(maxSenLen+2w-2, self.w)), self.numFilters)
+			example = examples[i]
+			# example:((convolution formula(maxSenLen+2w-2, self.w)), self.numFilters)
+			example = tf.squeeze(example)
+			A = tf.reduce_max(example[0:indicesToCut[i][0] + 1], axis = 0)
+			B = tf.reduce_max(example[indicesToCut[i][0] + 1, 
+				indicesToCut[i][1] + 1], axis = 0)
+			C = tf.reduce_max(example[indicesToCut[i][1] + 1, :], axis = 0)
+			# curResult: (3*self.numFilters,)
+			curResult = tf.concat([A, B, C], 0)
+			vectors.append(curResult)
+			#TODO: check the earlier padding issue here
+		# result: (batch_size, 3*self.numFilters)
+		result = tf.stack(vectors)
+		result = tf.tanh(result)
+		result = tf.layers.dropout(result, rate=self.dropout_rate, training=True)
+		# SOFTMAX 
+		# COMPUTE LOSS
+		# FIGURE OUT THE PREDICTION STEP
+
+
 
 	def forward_tf(self, X, y, indices):
 		"""
@@ -156,25 +203,17 @@ class RelationClassifier():
 		# Tf implementation can be done via padding and splitting
 		return out
 
-	def forward_np(self, X, y, indices):
-		"""
-		Args:
-			X = np matrix of size (batch_size, (convolution formula(maxSenLen+2w-2, self.w)), self.numFilters)
-			y = list[ int, ... ]               = relation label indices
-			indices = list[(index of entity1, index of entity2), (index of entity1, index of entity2), ...] 
-					= list of tuples where the first element of the tuple is the index of the first entity
-		Return:
-		"""		
-		indicesToCut = findIndicesToCut(indices)
-		for i in range(X.shape[0]):
-			# example: (convolution formula(maxSenLen+2w-2, self.w)), self.numFilters)
-			example = X[i]
-			A = np.max(example[0:indicesToCut[i][0] + 1], axis = 0)
-			B = np.max(example[indicesToCut[i][0] + 1, 
-				indicesToCut[i][1] + 1], axis = 0)
-			C = np.max(example[indicesToCut[i][1] + 1, :], axis = 0)
-			# curResult: (3*self.numFilters,)
-			curResult = np.concatenate(A, B, C)
+	
+	def run_train_iter(self, session, batch):
+
+		
+
+	def train(self, session):
+		epoch = 0
+		while epoch < self.num_epochs:
+			for batch in get_batch_generator():
+
+			epoch += 1
 
 
 
