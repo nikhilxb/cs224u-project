@@ -37,7 +37,7 @@ class RelationClassifier(nn.Module):
             X = list[ tuple(c1, c2, c3), ... ] = batch of training examples
             c1/c2/c3 = list[ string, ... ]     = list of word strings
         Return:
-            FloatTensor(batch_size, num_labels)
+            FloatTensor(batch_size, num_labels) = predicted labels for each example in batch
         """
         C1, C2, C3 = zip(*X)  # list[ tuple(c1a, c1b, ...), tuple(c2a, c2b, ...), tuple(c3a, c3b, ...)]
 
@@ -108,4 +108,4 @@ if __name__ == "__main__":
     print("RelationClassifier test:")
     print("--- _assemble_vec_seq:\n", rc._assemble_vec_seq(['apple', 'banana', 'coconut', 'durian', 'apple'])[:, :3])
     out = rc(X, y)
-    print("--- forward:\n", out.size() )
+    print("--- forward:\n", out.size())
