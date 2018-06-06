@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as functional
 from torch.nn.utils.rnn import pad_sequence
+import numpy as np
 
 import utils
 
@@ -13,7 +14,7 @@ class RelationClassifier(nn.Module):
     where A and B are the two entity mentions in a sentence and C1, C2, C3 are the before, middle, after sequences of
     context words.
     """
-    def __init__(self, vocab, embed_dim, output_dim=230, dropout=0.5, num_labels=50):
+    def __init__(self, vocab, embed_dim, output_dim, hidden_dim=230, dropout=0.5):
         """
         Args:
             vocab = dict[word] -> numpy array(embed_dim,) = vocabulary dict
@@ -26,9 +27,9 @@ class RelationClassifier(nn.Module):
         self.embed_dim = embed_dim
         self.unk = torch.rand(self.embed_dim)
 
-        self.pcnn = PiecewiseCNN(self.embed_dim, output_dim)
+        self.pcnn = PiecewiseCNN(self.embed_dim, hidden_dim)
         self.drop1 = nn.Dropout(p=dropout)
-        self.lin1 = nn.Linear(3 * output_dim, num_labels)
+        self.lin1 = nn.Linear(3 * hidden_dim, output_dim)
 
     def forward(self, X):
         """
@@ -38,14 +39,14 @@ class RelationClassifier(nn.Module):
         Return:
             FloatTensor(batch_size, num_labels) = predicted labels for each example in batch
         """
-        C1, C2, C3 = zip(*X)  # list[ tuple(1_c1, 1_c2, 1_c3), tuple(2_c1, 2_c2, 2_c3), ...]
+        batch_C1, batch_C2, batch_C3 = zip(*X)  # list[ tuple(1_c1, 1_c2, 1_c3), tuple(2_c1, 2_c2, 2_c3), ...]
 
-        C1 = pad_sequence([self._assemble_vec_seq(c) for c in C1], batch_first=True).transpose(1, 2)
-        C2 = pad_sequence([self._assemble_vec_seq(c) for c in C2], batch_first=True).transpose(1, 2)
-        C3 = pad_sequence([self._assemble_vec_seq(c) for c in C3], batch_first=True).transpose(1, 2)
+        padded_C1 = RelationClassifier._pad_sequence_unsorted([self._assemble_vec_seq(c1) for c1 in batch_C1], batch_first=True).transpose(1, 2)
+        padded_C2 = RelationClassifier._pad_sequence_unsorted([self._assemble_vec_seq(c2) for c2 in batch_C2], batch_first=True).transpose(1, 2)
+        padded_C3 = RelationClassifier._pad_sequence_unsorted([self._assemble_vec_seq(c3) for c3 in batch_C3], batch_first=True).transpose(1, 2)
         # output each is FloatTensor(batch_size, embed_dim, max_piece_len)
 
-        h = self.pcnn(C1, C2, C3)  # (batch_size, output_dim, 3)
+        h = self.pcnn(padded_C1, padded_C2, padded_C3)  # (batch_size, output_dim, 3)
         batch_size = h.size()[0]
         h = h.view(batch_size, -1)  # (batch_size, 3 * output_dim)
         h = self.drop1(h)
@@ -59,16 +60,30 @@ class RelationClassifier(nn.Module):
         Return:
             FloatTensor(seq_len, embed_dim)
         """
-        return torch.stack([self.vocab.get(word, self.unk) for word in seq])
+        x = [self.vocab.get(word, self.unk) for word in seq]
+        if len(x) == 0:
+            x = [torch.zeros(self.unk.shape)]
+        return torch.stack(x)
+
+    @staticmethod
+    def _pad_sequence_unsorted(batch_c, batch_first=False):
+        # create a numpy array indicating the original positions of C1
+        positions = np.arange(len(batch_c))
+        # sort the array based on the lengths of sequences of C1
+        positions = [x for _, x in sorted(zip([len(c) for c in batch_c],positions), reverse=True)]
+        # actually sort C
+        batch_c.sort(key=lambda x:len(x), reverse=True)
+        # pad it(Commented out here because I dont have torch)
+        batch_c = pad_sequence(batch_c, batch_first=batch_first)
+        # Sort it back to its original sequence(because we want it to match with C2, C3 etc)
+        batch_c = [x for _,x in sorted(zip(positions, batch_c), reverse=False)]
+        batch_c = torch.stack(batch_c)
+        return batch_c
 
 
 class PiecewiseCNN(nn.Module):
     """Applies convolution over a variable number of pieces and concatenates all the output pieces."""
-    def __init__(self,
-                 input_dim,
-                 output_dim,
-                 kernel_size=3,
-                 padding=2):
+    def __init__(self, input_dim, output_dim, kernel_size=3, padding=2):
         super(PiecewiseCNN, self).__init__()
         self.conv1 = nn.Conv1d(input_dim, output_dim, kernel_size, padding=padding)
 
