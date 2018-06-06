@@ -14,7 +14,7 @@ class RelationClassifier(nn.Module):
     where A and B are the two entity mentions in a sentence and C1, C2, C3 are the before, middle, after sequences of
     context words.
     """
-    def __init__(self, vocab, embed_dim, output_dim, hidden_dim=230, dropout=0.5):
+    def __init__(self, vocab, embed_dim, output_dim, hidden_dim=230, dropout=0.5, device='cpu'):
         """
         Args:
             vocab = dict[word] -> numpy array(embed_dim,) = vocabulary dict
@@ -23,13 +23,14 @@ class RelationClassifier(nn.Module):
         super(RelationClassifier, self).__init__()
         self.vocab = vocab
         for word, vec in self.vocab.items():
-            self.vocab[word] = torch.FloatTensor(vec)
+            self.vocab[word] = torch.FloatTensor(vec).to(device)
         self.embed_dim = embed_dim
-        self.unk = torch.rand(self.embed_dim)
+        self.unk = torch.rand(self.embed_dim).to(device)
 
         self.pcnn = PiecewiseCNN(self.embed_dim, hidden_dim)
         self.drop1 = nn.Dropout(p=dropout)
         self.lin1 = nn.Linear(3 * hidden_dim, output_dim)
+        self.device = device
 
     def forward(self, X):
         """
@@ -62,7 +63,7 @@ class RelationClassifier(nn.Module):
         """
         x = [self.vocab.get(word, self.unk) for word in seq]
         if len(x) == 0:
-            x = [torch.zeros(self.unk.shape)]
+            x = [torch.zeros(self.unk.shape, device=self.device)]
         return torch.stack(x)
 
     @staticmethod
