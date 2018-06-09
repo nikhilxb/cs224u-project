@@ -35,21 +35,22 @@ def createEmbedMatrix(embeddingFileName="../../../glove.6B.50d.txt"):
 	return emb_matrix, word2Index, index2Word
 
 def main(unused_argv):	
-	hyperparams={"numFilters": 230, "dropout_rate": 0.5, "num_epochs": 75, "learning_rate": 0.001}
+	hyperparams={"numFilters": 230, "dropout_rate": 0.5, "num_epochs": 75, "learning_rate": 0.001, 
+	"reg_constant": 0.05}
 	
 	emb_matrix, word2Index, index2Word = createEmbedMatrix()
 	relation2Id = {} 
 	# This is a required document
 	readDictFromFile(relation2Id, "../../../SemEval2010_task8_all_data/cleaned/cleaned_relation2Id.txt")
-	numFiltersL = [230]
-	learning_rateL = [0.001]
-	for numFilters in numFiltersL:
-		for learning_rate in learning_rateL:
-			hyperparams["numFilters"] = numFilters
-			hyperparams["learning_rate"] = learning_rate
+	dropout_rateL = [0.5, 0.7]
+	reg_constantL = [0.05, 0.2]
+	for dropout_rate in dropout_rateL:
+		for reg_constant in reg_constantL:
+			hyperparams["dropout_rate"] = dropout_rate
+			hyperparams["reg_constant"] = reg_constant
 			# Initialize model
 			print("Initializing model")
-			model = RelationClassifier(emb_matrix, relation2Id, word2Index, hyperparams, experimentName="DropoutAdded")
+			model = RelationClassifier(emb_matrix, relation2Id, word2Index, hyperparams, experimentName="PrevOverfit")
 			print("Initializing model finished")
 			with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
 				# Initialize variables

@@ -41,6 +41,7 @@ class RelationClassifier():
 		self.num_epochs = hyperparams["num_epochs"]
 		# number of classes
 		self.num_classes = len(relation2Id)
+		self.reg_constant = hyperparams["reg_constant"]
 		self.batch_size = 128 
 		self.trainFileName = trainFileName
 		self.devFileName = devFileName
@@ -106,7 +107,8 @@ class RelationClassifier():
 
 	def add_loss(self):
 		self.loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
-			logits=self.logits, labels=self.labels))
+			logits=self.logits, labels=self.labels)) + tf.add_n([tf.nn.l2_loss(v) for v in vars
+              											if 'bias' not in v.name ]) * self.reg_constant
 
 	def compute_metrics(self):
 		self.predictions = tf.argmax(self.logits, axis=1, output_type=tf.int32)
@@ -173,8 +175,8 @@ class RelationClassifier():
 			losses.append(epochLoss)
 			epoch += 1
 			print("Epoch loss: (%d). Accuracy: (%d).", epochLoss, cMAcc)
-			# every 5 epochs look at dev loss and accuracy
-			if epoch % 5 == 0:
+			# every 1 epochs look at dev loss and accuracy
+			if epoch % 1 == 0:
 				devLoss, devConfusionMatrix = self.getDevEval(session)
 				losses_dev.append(devLoss)
 				confusion_matrices_dev.append(devConfusionMatrix)
