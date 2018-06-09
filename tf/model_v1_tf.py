@@ -28,7 +28,7 @@ class RelationClassifier():
 	Args:
 
 	"""
-	def __init__(self, emb_matrix, relation2Id, word2Index, hyperparams, experimentName="default", trainFileName="../../../SemEval2010_task8_all_data/SemEval2010_task8_training/TRAIN_FILE.TXT"):
+	def __init__(self, emb_matrix, relation2Id, word2Index, hyperparams, experimentName="default", trainFileName="../../../SemEval2010_task8_all_data/SemEval2010_task8_training/TRAIN_FILE.TXT", devFileName="../../../SemEval2010_task8_all_data/SemEval2010_task8_testing_keys/DEV_FILE.TXT"):
 		# filter size in the 'width' dimension
 		self.w = 3
 		# number of filters
@@ -43,6 +43,7 @@ class RelationClassifier():
 		self.num_classes = len(relation2Id)
 		self.batch_size = 128 
 		self.trainFileName = trainFileName
+		self.devFileName = devFileName
 		self.word2Index = word2Index
 		self.relation2Id = relation2Id
 		self.learning_rate = hyperparams["learning_rate"]
@@ -105,7 +106,6 @@ class RelationClassifier():
 	def add_loss(self):
 		self.loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
 			logits=self.logits, labels=self.labels))
-		#self.summaries.value.add(tag='loss', simple_value=self.loss)
 
 	def compute_metrics(self):
 		self.predictions = tf.argmax(self.logits, axis=1, output_type=tf.int32)
@@ -123,7 +123,26 @@ class RelationClassifier():
 		#summary_writer.add_summary(summaries, global_step)
 			
 		return loss, numEqual, predictions, labels
+
+	def get_loss(self, session, batch):
+		input_feed = {}
+		input_feed[self.C1] = batch[0]
+		input_feed[self.C2] = batch[1]
+		input_feed[self.C3] = batch[2]
+		input_feed[self.labels] = batch[4]
+		output_feed = [self.loss, self.global_step, self.numEqual, self.predictions, self.labels]
+		loss, global_step, numEqual, predictions, labels = session.run(output_feed, input_feed)
+		return loss, predictions, labels
 	
+	def getDevEval(self, session):
+		totalLoss = 0
+		confusionMatrix = np.zeros((self.num_classes, self.num_classes))
+		for batch in get_batch_generator(self.batch_size, self.devFileName, self.word2Index, self.relation2Id, self.fileExists, self.batchesFileName):
+			loss, predictions, labels = self.get_loss(session, batch)
+			totalLoss += loss
+			confusionMatrix = self._fillConfusionMatrix(confusionMatrix, predictions, labels)
+		return totalLoss, confusionMatrix
+
 	def _fillConfusionMatrix(self, cM, preds, labels):
 		for i in range(0, len(preds)):
 			cM[labels[i], preds[i]] += 1
@@ -132,10 +151,12 @@ class RelationClassifier():
 	
 	def train(self, session):
 		losses = []	
+		losses_dev = []
 		epoch = 0
 		summary_writer = tf.summary.FileWriter("experiments/" + self.experimentName,
 							session.graph)
 		confusion_matrices = []
+		confusion_matrices_dev = []
 		while epoch < self.num_epochs:
 			confusionMatrix = np.zeros((self.num_classes, self.num_classes))
 			epochLoss = 0
@@ -150,8 +171,18 @@ class RelationClassifier():
 			losses.append(epochLoss)
 			epoch += 1
 			print("Epoch loss: (%d). Accuracy: (%d).", epochLoss, cMAcc)
+			# every 5 epochs look at dev loss and accuracy
+			if epoch % 5 == 0:
+				devLoss, devConfusionMatrix = self.getDevEval(session)
+				losses_dev.append(devLoss)
+				confusion_matrices_dev.append(devConfusionMatrix)
+				print("Dev accuracy: ", np.trace(devConfusionMatrix) * 1.0 / np.sum(devConfusionMatrix))
 		with open("experiments/" + self.experimentName + "_losses.txt", "wb") as f:
 			pickle.dump(losses, f)
+		with open("experiments/" + self.experimentName + "_losses_dev.txt", "wb") as f:
+			pickle.dump(losses_dev, f)
+		with open("experiments/" + self.experimentName + "_confusionMatrices_dev.txt", "wb") as f:
+			pickle.dump(devConfusionMatrix, f)
 		with open("experiments/" + self.experimentName + "_confusionMatrices.txt", "wb") as f:
 			pickle.dump(confusion_matrices, f)
 
