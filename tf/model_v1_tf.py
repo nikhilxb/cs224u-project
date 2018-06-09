@@ -1,4 +1,5 @@
 import tensorflow as tf 
+import pickle
 from tf_utils import get_batch_generator
 import numpy as np
 import os, sys
@@ -7,7 +8,7 @@ import utils
 
 
 def loadData():
-	vocab = utils.glove2dict("../../../../../GitHub/cs224u/vsmdata/glove/glove.6B.50d.txt")  # dict[word] -> numpy array(embed_dim,)
+	vocab = utils.glove2dict("../../../glove.6B.50d.txt")  # dict[word] -> numpy array(embed_dim,)
 	# self.embedding_matrix: (embed_dim, vocab_size)
 	embedding_matrix = np.zeros((len(vocab["and"]), len(vocab)))
 	word2Index = {}
@@ -27,26 +28,34 @@ class RelationClassifier():
 	Args:
 
 	"""
-	def __init__(self, emb_matrix, relation2Id, word2Index, trainFileName="SemEval2010_task8_all_data/SemEval2010_task8_training/TRAIN_FILE.TXT"):
+	def __init__(self, emb_matrix, relation2Id, word2Index, hyperparams, experimentName="default", trainFileName="../../../SemEval2010_task8_all_data/SemEval2010_task8_training/TRAIN_FILE.TXT"):
 		# filter size in the 'width' dimension
 		self.w = 3
 		# number of filters
-		self.numFilters = 230
+		self.numFilters = hyperparams["numFilters"]
 		# stride along the 'width' dimension
 		self.stride = 1
 		# probability of dropping out a neuron
-		self.dropout_rate = 0.5
+		self.dropout_rate = hyperparams["dropout_rate"]
 		# number of epochs
-		self.num_epochs = 25
+		self.num_epochs = hyperparams["num_epochs"]
 		# number of classes
 		self.num_classes = len(relation2Id)
-		self.batch_size = 50
+		self.batch_size = 128 
 		self.trainFileName = trainFileName
 		self.word2Index = word2Index
 		self.relation2Id = relation2Id
-		self.learning_rate = 0.001
+		self.learning_rate = hyperparams["learning_rate"]
 		self.numTrainSamples = 8000.0
-
+		self.experimentName = str(hyperparams)+experimentName
+		# If is true, then read the dataset from a file that stores the whole dataset
+		# in one data structure 
+		self.fileExists = False 
+		self.batchesFileName = ""
+	        # Define savers (for checkpointing) and summaries (for tensorboard)
+		#self.summaries = tf.Summary() 
+		self.global_step = tf.Variable(0, name="global_step", trainable=False)	
+		
 		# This is the actual operations
 		self.add_placeholders()
 		self.add_embedding_layer(emb_matrix)
@@ -54,7 +63,7 @@ class RelationClassifier():
 		self.add_loss()
 		self.compute_metrics()
 		opt = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
-		self.updates = opt.minimize(self.loss)
+		self.updates = opt.minimize(self.loss, global_step=self.global_step)
 
 	def add_placeholders(self):
 		self.C1 = tf.placeholder(tf.int32, shape=[None, None])
@@ -86,44 +95,65 @@ class RelationClassifier():
 		result = tf.concat([out1, out2, out3], 1)
 		result = tf.tanh(result)
 		result = tf.layers.dropout(result, rate=self.dropout_rate)
+		result = tf.contrib.layers.fully_connected(result, 
+			self.numFilters)
+		result = tf.contrib.layers.fully_connected(result, 
+			int(self.numFilters/3))
 		self.logits = tf.contrib.layers.fully_connected(result, 
 			self.num_classes, activation_fn=None)
 
 	def add_loss(self):
 		self.loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
 			logits=self.logits, labels=self.labels))
+		#self.summaries.value.add(tag='loss', simple_value=self.loss)
 
 	def compute_metrics(self):
 		self.predictions = tf.argmax(self.logits, axis=1, output_type=tf.int32)
 		self.numEqual = tf.reduce_sum(tf.cast(tf.equal(self.predictions, self.labels), tf.float32)) 
  
-	def run_train_iter(self, session, batch):
+	def run_train_iter(self, session, batch, summary_writer):
 		input_feed = {}
 		input_feed[self.C1] = batch[0]
 		input_feed[self.C2] = batch[1]
 		input_feed[self.C3] = batch[2]
 		input_feed[self.labels] = batch[4]
-		output_feed = [self.updates, self.loss, self.numEqual]
-		_, loss, numEqual = session.run(output_feed, input_feed)
-		return loss, numEqual
+		output_feed = [self.updates, self.loss, self.global_step, self.numEqual, self.predictions, self.labels]
+		_, loss, global_step, numEqual, predictions, labels = session.run(output_feed, input_feed)
 		
+		#summary_writer.add_summary(summaries, global_step)
+			
+		return loss, numEqual, predictions, labels
+	
+	def _fillConfusionMatrix(self, cM, preds, labels):
+		for i in range(0, len(preds)):
+			cM[labels[i], preds[i]] += 1
+		return cM
+	
+	
 	def train(self, session):
 		losses = []	
-		accuracies = []
 		epoch = 0
+		summary_writer = tf.summary.FileWriter("experiments/" + self.experimentName,
+							session.graph)
+		confusion_matrices = []
 		while epoch < self.num_epochs:
+			confusionMatrix = np.zeros((self.num_classes, self.num_classes))
 			epochLoss = 0
 			epochNumEqual = 0
-			for batch in get_batch_generator(self.batch_size, self.trainFileName, self.word2Index, self.relation2Id):
-				loss, numEqual = self.run_train_iter(session, batch)
+			for batch in get_batch_generator(self.batch_size, self.trainFileName, self.word2Index, self.relation2Id, self.fileExists, self.batchesFileName):
+				loss, numEqual, predictions, labels = self.run_train_iter(session, batch, summary_writer)
+				confusionMatrix = self._fillConfusionMatrix(confusionMatrix, predictions, labels)
 				epochLoss += loss
-				epochNumEqual += numEqual
+			cMAcc = np.trace(confusionMatrix) * 1.0 / np.sum(confusionMatrix)
 			epochLoss /= self.numTrainSamples
-			epochNumEqual /= self.numTrainSamples
+			confusion_matrices.append(confusionMatrix)
 			losses.append(epochLoss)
-			losses.append(epochNumEqual)
 			epoch += 1
-			print("Epoch loss: %d. Accuracy: %d", epochLoss, epochNumEqual)
+			print("Epoch loss: (%d). Accuracy: (%d).", epochLoss, cMAcc)
+		with open("experiments/" + self.experimentName + "_losses.txt", "wb") as f:
+			pickle.dump(losses, f)
+		with open("experiments/" + self.experimentName + "_confusionMatrices.txt", "wb") as f:
+			pickle.dump(confusion_matrices, f)
 
 '''
 ######################################

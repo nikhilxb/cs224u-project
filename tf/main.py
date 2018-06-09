@@ -8,7 +8,7 @@ import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import utils
 
-def createEmbedMatrix(embeddingFileName="../../../../../../GitHub/cs224u/vsmdata/glove/glove.6B.50d.txt"):
+def createEmbedMatrix(embeddingFileName="../../../glove.6B.50d.txt"):
 	vocab = utils.glove2dict(embeddingFileName)
 	emb_matrix = np.zeros((len(vocab) + 2, vocab["the"].shape[0]))
 	word2Index = {}
@@ -34,24 +34,30 @@ def createEmbedMatrix(embeddingFileName="../../../../../../GitHub/cs224u/vsmdata
 	emb_matrix[word2Index["<PAD>"]] = np.zeros_like(vocab["the"])
 	return emb_matrix, word2Index, index2Word
 
-def main(unused_argv):
-
+def main(unused_argv):	
+	hyperparams={"numFilters": 230, "dropout_rate": 0.5, "num_epochs": 100, "learning_rate": 0.001}
+	
 	emb_matrix, word2Index, index2Word = createEmbedMatrix()
 	relation2Id = {} 
 	# This is a required document
-	readDictFromFile(relation2Id, "SemEval2010_task8_all_data/cleaned/cleaned_relation2Id.txt")
-
-	# Initialize model
-	print("Initializing model")
-	model = RelationClassifier(emb_matrix, relation2Id, word2Index)
-	print("Initializing model finished")
-
-	with tf.Session() as sess:
-		# Initialize variables
-		sess.run(tf.local_variables_initializer())
-		sess.run(tf.global_variables_initializer())
-		model.train(sess)
-		#print 'Num params: %d' % sum(v.get_shape().num_elements() for v in tf.trainable_variables())		
+	readDictFromFile(relation2Id, "../../../SemEval2010_task8_all_data/cleaned/cleaned_relation2Id.txt")
+	numFiltersL = [150, 230, 350]
+	learning_rateL = [0.0005, 0.001, 0.005]
+	for numFilters in numFiltersL:
+		for learning_rate in learning_rateL:
+			hyperparams["numFilters"] = numFilters
+			hyperparams["learning_rate"] = learning_rate
+			# Initialize model
+			print("Initializing model")
+			model = RelationClassifier(emb_matrix, relation2Id, word2Index, hyperparams)
+			print("Initializing model finished")
+			with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
+				# Initialize variables
+				sess.run(tf.local_variables_initializer())
+				sess.run(tf.global_variables_initializer())
+				model.train(sess)
+				print("Training done")
+				#print 'Num params: %d' % sum(v.get_shape().num_elements() for v in tf.trainable_variables())		
 
 
 def test():

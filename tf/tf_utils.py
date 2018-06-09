@@ -1,4 +1,4 @@
-
+import pickle
 import tensorflow as tf
 import numpy as np
 from data_utils import readDictFromFile
@@ -130,7 +130,7 @@ def refill_batches(batches, trainDataFile, batch_size, word2Index, relation2Id, 
 		examples.append(example)
 		if len(examples) == batch_size * 5:
 			break
-	#random.shuffle(examples)
+	random.shuffle(examples)
 	# Divide examples into batches
 	for i in range(0, len(examples), batch_size):
 		curBatch = examples[i:i+batch_size]
@@ -158,16 +158,25 @@ def refill_batches(batches, trainDataFile, batch_size, word2Index, relation2Id, 
 # where C2: (batch_size, C2_len)
 # where C3: (batch_size, C3_len)
 # Ci_len is not known beforehand
-def get_batch_generator(batch_size, trainDataFileName, word2Index, relation2Id):
-	trainDataFile = open(trainDataFileName)
-	batches = []
-	lineCounter = 0
-	while True:
-		if len(batches) == 0:
-			lineCounter = refill_batches(batches, trainDataFile, batch_size, word2Index, relation2Id, lineCounter)
-		if len(batches) == 0:
-			return
-		yield batches.pop(0)
+def get_batch_generator(batch_size, trainDataFileName, word2Index, relation2Id, fileExists, batchesFileName):
+	if fileExists:
+		with open(batchesFileName, "rb") as f:
+			batches = pickle.load(f) 
+			print(len(batches))
+		random.shuffle(batches)
+		for i in range(0, len(batches), batch_size):
+			curBatch = batches[i:i+batch_size]	
+			yield curBatch 
+	else:
+		trainDataFile = open(trainDataFileName)
+		batches = []
+		lineCounter = 0
+		while True:
+			if len(batches) == 0:
+				lineCounter = refill_batches(batches, trainDataFile, batch_size, word2Index, relation2Id, lineCounter)
+			if len(batches) == 0:
+				return
+			yield batches.pop(0)
 
 
 def get_batch_generator_test():
