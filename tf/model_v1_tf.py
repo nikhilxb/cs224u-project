@@ -107,7 +107,7 @@ class RelationClassifier():
 
 	def add_loss(self):
 		self.loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
-			logits=self.logits, labels=self.labels)) + tf.add_n([tf.nn.l2_loss(v) for v in vars
+			logits=self.logits, labels=self.labels)) + tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables()
               											if 'bias' not in v.name ]) * self.reg_constant
 
 	def compute_metrics(self):
