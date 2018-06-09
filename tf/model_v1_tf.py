@@ -1,4 +1,5 @@
 import tensorflow as tf 
+from tf_utils import get_batch_generator
 import numpy as np
 import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -24,45 +25,110 @@ class RelationClassifier():
 	"""
 	"""
 	Args:
-		embedding_matrix = numpy array of dimensions (embed_dim, vocab_size)
-		word2Index = dictionary of size vocab_size, mapping string to integer
-		index2Word = dictionary of size vocab_size, mapping integer to string
-		NOTE THAT WE ADD THE UNK_TOKEN HERE, AND VOCAB_SIZE INCREASES BY 1, BUT
-		WE WILL STILL CALL vocab_size AND NOT vocab_size + 1 FOR CONVENIENCE
+
 	"""
-	def __init__(self, embedding_matrix, word2Index, index2Word, sentenceLengths):
-		# add unk token to embedding matrix
-		np.random.seed(1)
-		# create a random vector
-		# unk_vector: 
-		unk_vector = np.random.randint(-1, high=1, size=(embedding_matrix.shape[0], 1))
-		# add the unk_vector to embedding_matrix
-		embedding_matrix = np.append(embedding_matrix, unk_vector, axis = 1)
-		self.embedding_matrix = tf.convert_to_tensor(embedding_matrix)
-		self.word2Index = word2Index
-		self.index2Word = index2Word
+	def __init__(self, emb_matrix, relation2Id, word2Index, trainFileName="SemEval2010_task8_all_data/SemEval2010_task8_training/TRAIN_FILE.TXT"):
 		# filter size in the 'width' dimension
 		self.w = 3
 		# number of filters
-		self.numFilters = 5
+		self.numFilters = 230
 		# stride along the 'width' dimension
 		self.stride = 1
 		# probability of dropping out a neuron
-		self.dropout_rate = 0.2
+		self.dropout_rate = 0.5
 		# number of epochs
-		self.num_epochs = 3
-		# Will use later
-		self.sentenceLengths = sentenceLengths
+		self.num_epochs = 25
+		# number of classes
+		self.num_classes = len(relation2Id)
+		self.batch_size = 50
+		self.trainFileName = trainFileName
+		self.word2Index = word2Index
+		self.relation2Id = relation2Id
+		self.learning_rate = 0.001
+		self.numTrainSamples = 8000.0
 
 		# This is the actual operations
 		self.add_placeholders()
+		self.add_embedding_layer(emb_matrix)
 		self.build_graph()
-		#self.add_loss()
+		self.add_loss()
+		self.compute_metrics()
+		opt = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
+		self.updates = opt.minimize(self.loss)
 
 	def add_placeholders(self):
-		self.X = tf.placeholder(tf.float32, shape=[None, embed_dim, None])
-		self.y = tf.placeholder(tf.int32, shape=[None, 1])
+		self.C1 = tf.placeholder(tf.int32, shape=[None, None])
+		self.C2 = tf.placeholder(tf.int32, shape=[None, None])
+		self.C3 = tf.placeholder(tf.int32, shape=[None, None])
+		self.labels = tf.placeholder(tf.int32, shape=[None,])
 		
+
+	def add_embedding_layer(self, emb_matrix):
+		embedding_matrix = tf.constant(emb_matrix, dtype=tf.float32)
+		self.C1_embed = tf.nn.embedding_lookup(embedding_matrix, self.C1)
+		self.C2_embed = tf.nn.embedding_lookup(embedding_matrix, self.C2)
+		self.C3_embed = tf.nn.embedding_lookup(embedding_matrix, self.C3)
+
+	def build_graph(self):
+		# TODO: Add padding before
+		# Use self.C1_embed, self.C2_embed, self.C3_embed
+		# self.C1_embed: (batch_size, embed_dim, maxC1Len)
+		# Make sure that the dimensions of self.Ci_embed is (b, m, e)!
+		# out1: (batch_size, something, numFilters)
+		out1 = tf.layers.conv1d(self.C1_embed, self.numFilters, self.w, padding='valid')
+		out2 = tf.layers.conv1d(self.C1_embed, self.numFilters, self.w, padding='valid')
+		out3 = tf.layers.conv1d(self.C1_embed, self.numFilters, self.w, padding='valid')
+		# out1: (batch_size, numFilters)
+		out1 = tf.reduce_max(out1, axis=1)
+		out2 = tf.reduce_max(out2, axis=1)
+		out3 = tf.reduce_max(out3, axis=1)
+		# result: (batch_size, 3*numFilters)
+		result = tf.concat([out1, out2, out3], 1)
+		result = tf.tanh(result)
+		result = tf.layers.dropout(result, rate=self.dropout_rate)
+		self.logits = tf.contrib.layers.fully_connected(result, 
+			self.num_classes, activation_fn=None)
+
+	def add_loss(self):
+		self.loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
+			logits=self.logits, labels=self.labels))
+
+	def compute_metrics(self):
+		self.predictions = tf.argmax(self.logits, axis=1, output_type=tf.int32)
+		self.numEqual = tf.reduce_sum(tf.cast(tf.equal(self.predictions, self.labels), tf.float32)) 
+ 
+	def run_train_iter(self, session, batch):
+		input_feed = {}
+		input_feed[self.C1] = batch[0]
+		input_feed[self.C2] = batch[1]
+		input_feed[self.C3] = batch[2]
+		input_feed[self.labels] = batch[4]
+		output_feed = [self.updates, self.loss, self.numEqual]
+		_, loss, numEqual = session.run(output_feed, input_feed)
+		return loss, numEqual
+		
+	def train(self, session):
+		losses = []	
+		accuracies = []
+		epoch = 0
+		while epoch < self.num_epochs:
+			epochLoss = 0
+			epochNumEqual = 0
+			for batch in get_batch_generator(self.batch_size, self.trainFileName, self.word2Index, self.relation2Id):
+				loss, numEqual = self.run_train_iter(session, batch)
+				epochLoss += loss
+				epochNumEqual += numEqual
+			epochLoss /= self.numTrainSamples
+			epochNumEqual /= self.numTrainSamples
+			losses.appen(epochLoss)
+			losses.appen(epochNumEqual)
+			epoch += 1
+			print("Epoch loss: %d. Accuracy: %d", epochLoss, epochPrecision)
+
+'''
+######################################
+OLD OPERATIONS
+
 	def convertInputToTensor(self, X):
 		"""
 		Args:
@@ -114,7 +180,7 @@ class RelationClassifier():
 			cutPoints.append(point)
 		return cutPoints
 
-	def build_graph(self):
+	def build_graph2(self):
 		X = tf.expand_dims(self.X, axis=-1)
 		embed_dim = X.shape[1]
 		# out:(batch_size, 1, (convolution formula(maxSenLen+2w-2, self.w)), self.numFilters)
@@ -194,32 +260,12 @@ class RelationClassifier():
 		# SOFTMAX 
 		# COMPUTE LOSS
 		# FIGURE OUT THE PREDICTION STEP
-
-
-
-
-
 		# Continuing as numpy here due to time constraints
 		# Tf implementation can be done via padding and splitting
 		return out
 
-	
-	def run_train_iter(self, session, batch):
-
-		
-
-	def train(self, session):
-		epoch = 0
-		while epoch < self.num_epochs:
-			for batch in get_batch_generator():
-
-			epoch += 1
-
-
-
-
-
-
+######################################
+OLD TEST
 
 #embedding_matrix, word2Index, index2Word = loadData()
 #print(embedding_matrix.shape)
@@ -247,6 +293,7 @@ print(F.shape)
 out = tf.nn.conv1d(A, F, 1, 'VALID')
 with tf.Session() as sess:
 	print(sess.run(out))
+'''
 	
 
 
