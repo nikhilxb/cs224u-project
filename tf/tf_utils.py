@@ -81,7 +81,6 @@ def convertLineToIdx(line, table, word2Index):
 	tokens = line.split()
 	# Get sentence id
 	sentenceId = int(tokens[0])
-	print(line)
 	tokens = tokens[1:]
 	beginFEntity, endFEntity, beginSEntity, endSEntity = findIndices(tokens)
 	c1 = tokens[:beginFEntity]

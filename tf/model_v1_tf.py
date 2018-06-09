@@ -120,10 +120,10 @@ class RelationClassifier():
 				epochNumEqual += numEqual
 			epochLoss /= self.numTrainSamples
 			epochNumEqual /= self.numTrainSamples
-			losses.appen(epochLoss)
-			losses.appen(epochNumEqual)
+			losses.append(epochLoss)
+			losses.append(epochNumEqual)
 			epoch += 1
-			print("Epoch loss: %d. Accuracy: %d", epochLoss, epochPrecision)
+			print("Epoch loss: %d. Accuracy: %d", epochLoss, epochNumEqual)
 
 '''
 ######################################
