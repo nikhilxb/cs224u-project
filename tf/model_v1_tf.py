@@ -28,7 +28,7 @@ class RelationClassifier():
 	Args:
 
 	"""
-	def __init__(self, emb_matrix, relation2Id, word2Index, hyperparams, experimentName="default", trainFileName="../../../SemEval2010_task8_all_data/SemEval2010_task8_training/TRAIN_FILE.TXT", devFileName="../../../SemEval2010_task8_all_data/SemEval2010_task8_testing_keys/DEV_FILE.TXT"):
+	def __init__(self, emb_matrix, relation2Id, word2Index, hyperparams, experimentName="default", trainFileName="SemEval2010_task8_all_data/SemEval2010_task8_training/TRAIN_FILE.TXT", devFileName="SemEval2010_task8_all_data/SemEval2010_task8_testing_keys/DEV_FILE.TXT"):
 		# filter size in the 'width' dimension
 		self.w = 3
 		# number of filters
@@ -49,13 +49,12 @@ class RelationClassifier():
 		self.relation2Id = relation2Id
 		self.learning_rate = hyperparams["learning_rate"]
 		self.numTrainSamples = 8000.0
-		self.experimentName = str(hyperparams)+experimentName
+		self.experimentName = experimentName + "/" + experimentName+str(hyperparams)
 		# If is true, then read the dataset from a file that stores the whole dataset
 		# in one data structure 
 		self.fileExists = False 
 		self.batchesFileName = ""
-	        # Define savers (for checkpointing) and summaries (for tensorboard)
-		#self.summaries = tf.Summary() 
+
 		self.global_step = tf.Variable(0, name="global_step", trainable=False)	
 		
 		# This is the actual operations
@@ -86,10 +85,10 @@ class RelationClassifier():
 		# Use self.C1_embed, self.C2_embed, self.C3_embed
 		# self.C1_embed: (batch_size, embed_dim, maxC1Len)
 		# Make sure that the dimensions of self.Ci_embed is (b, m, e)!
-		# out1: (batch_size, something, numFilters)
+		# out1: (batch_size, something, numFilters)	
 		out1 = tf.layers.conv1d(self.C1_embed, self.numFilters, self.w, padding='valid')
-		out2 = tf.layers.conv1d(self.C1_embed, self.numFilters, self.w, padding='valid')
-		out3 = tf.layers.conv1d(self.C1_embed, self.numFilters, self.w, padding='valid')
+		out2 = tf.layers.conv1d(self.C2_embed, self.numFilters, self.w, padding='valid')
+		out3 = tf.layers.conv1d(self.C3_embed, self.numFilters, self.w, padding='valid')
 		# out1: (batch_size, numFilters)
 		out1 = tf.reduce_max(out1, axis=1)
 		out2 = tf.reduce_max(out2, axis=1)
@@ -114,7 +113,7 @@ class RelationClassifier():
 		self.predictions = tf.argmax(self.logits, axis=1, output_type=tf.int32)
 		self.numEqual = tf.reduce_sum(tf.cast(tf.equal(self.predictions, self.labels), tf.float32)) 
  
-	def run_train_iter(self, session, batch, summary_writer):
+	def run_train_iter(self, session, batch):
 		input_feed = {}
 		input_feed[self.C1] = batch[0]
 		input_feed[self.C2] = batch[1]
@@ -122,9 +121,7 @@ class RelationClassifier():
 		input_feed[self.labels] = batch[4]
 		output_feed = [self.updates, self.loss, self.global_step, self.numEqual, self.predictions, self.labels]
 		_, loss, global_step, numEqual, predictions, labels = session.run(output_feed, input_feed)
-		
-		#summary_writer.add_summary(summaries, global_step)
-			
+					
 		return loss, numEqual, predictions, labels
 
 	def get_loss(self, session, batch):
@@ -141,7 +138,7 @@ class RelationClassifier():
 	def getDevEval(self, session):
 		totalLoss = 0
 		confusionMatrix = np.zeros((self.num_classes, self.num_classes))
-		for batch in get_batch_generator(self.batch_size, self.devFileName, self.word2Index, self.relation2Id, self.fileExists, self.batchesFileName):
+		for batch in get_batch_generator(self.batch_size, self.devFileName, self.word2Index, self.relation2Id):
 			loss, predictions, labels = self.get_loss(session, batch)
 			totalLoss += loss
 			confusionMatrix = self._fillConfusionMatrix(confusionMatrix, predictions, labels)
@@ -157,16 +154,14 @@ class RelationClassifier():
 		losses = []	
 		losses_dev = []
 		epoch = 0
-		summary_writer = tf.summary.FileWriter("experiments/" + self.experimentName,
-							session.graph)
 		confusion_matrices = []
 		confusion_matrices_dev = []
 		while epoch < self.num_epochs:
 			confusionMatrix = np.zeros((self.num_classes, self.num_classes))
 			epochLoss = 0
 			epochNumEqual = 0
-			for batch in get_batch_generator(self.batch_size, self.trainFileName, self.word2Index, self.relation2Id, self.fileExists, self.batchesFileName):
-				loss, numEqual, predictions, labels = self.run_train_iter(session, batch, summary_writer)
+			for batch in get_batch_generator(self.batch_size, self.trainFileName, self.word2Index, self.relation2Id):
+				loss, numEqual, predictions, labels = self.run_train_iter(session, batch)
 				confusionMatrix = self._fillConfusionMatrix(confusionMatrix, predictions, labels)
 				epochLoss += loss
 			cMAcc = np.trace(confusionMatrix) * 1.0 / np.sum(confusionMatrix)

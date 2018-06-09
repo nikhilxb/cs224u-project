@@ -41,16 +41,16 @@ def main(unused_argv):
 	emb_matrix, word2Index, index2Word = createEmbedMatrix()
 	relation2Id = {} 
 	# This is a required document
-	readDictFromFile(relation2Id, "../../../SemEval2010_task8_all_data/cleaned/cleaned_relation2Id.txt")
-	dropout_rateL = [0.5, 0.7]
-	reg_constantL = [0.05, 0.2]
+	readDictFromFile(relation2Id, "SemEval2010_task8_all_data/cleaned/cleaned_relation2Id.txt")
+	dropout_rateL = [0, 0.5]
+	reg_constantL = [0, 0.005]
 	for dropout_rate in dropout_rateL:
 		for reg_constant in reg_constantL:
 			hyperparams["dropout_rate"] = dropout_rate
 			hyperparams["reg_constant"] = reg_constant
 			# Initialize model
 			print("Initializing model")
-			model = RelationClassifier(emb_matrix, relation2Id, word2Index, hyperparams, experimentName="PrevOverfit")
+			model = RelationClassifier(emb_matrix, relation2Id, word2Index, hyperparams, experimentName="TestReg")
 			print("Initializing model finished")
 			with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
 				# Initialize variables
@@ -58,16 +58,6 @@ def main(unused_argv):
 				sess.run(tf.global_variables_initializer())
 				model.train(sess)
 				print("Training done")
-				#print 'Num params: %d' % sum(v.get_shape().num_elements() for v in tf.trainable_variables())		
-
-
-def test():
-	a = tf.constant([1, 2, 3, 4, 5])
-	b = tf.constant([1, 2, 0, 4, 1])
-	c = tf.reduce_sum(tf.cast(tf.equal(a, b), tf.float32))/tf.shape(a)
-	with tf.Session() as sess:
-		print(sess.run(c))
-		#print()
 
 if __name__ == "__main__":
     tf.app.run()
