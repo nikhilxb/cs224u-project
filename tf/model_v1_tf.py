@@ -71,6 +71,7 @@ class RelationClassifier():
 		self.C2 = tf.placeholder(tf.int32, shape=[None, None])
 		self.C3 = tf.placeholder(tf.int32, shape=[None, None])
 		self.labels = tf.placeholder(tf.int32, shape=[None,])
+		self.keep_prob = tf.placeholder_with_default(1.0, shape=())
 		
 
 	def add_embedding_layer(self, emb_matrix):
@@ -95,7 +96,7 @@ class RelationClassifier():
 		# result: (batch_size, 3*numFilters)
 		result = tf.concat([out1, out2, out3], 1)
 		result = tf.tanh(result)
-		result = tf.layers.dropout(result, rate=self.dropout_rate)
+		result = tf.layers.dropout(result, rate=1-self.keep_prob)
 		result = tf.contrib.layers.fully_connected(result, 
 			self.numFilters)
 		result = tf.contrib.layers.fully_connected(result, 
@@ -130,6 +131,7 @@ class RelationClassifier():
 		input_feed[self.C2] = batch[1]
 		input_feed[self.C3] = batch[2]
 		input_feed[self.labels] = batch[4]
+		input_feed[self.keep_prob] = 1-self.dropout_rate
 		output_feed = [self.loss, self.global_step, self.numEqual, self.predictions, self.labels]
 		loss, global_step, numEqual, predictions, labels = session.run(output_feed, input_feed)
 		return loss, predictions, labels
